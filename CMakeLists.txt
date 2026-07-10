@@ -14,10 +14,18 @@ find_package(glfw3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 
 # libbpf — opt-in via system pkg-config (not vcpkg).
+# HAS_LIBBPF is only defined when BOTH libbpf and bpftool are present
+# (bpftool is required at build time for skeleton generation).
 find_package(PkgConfig)
 pkg_check_modules(LIBBPF libbpf IMPORTED_TARGET)
+find_program(BPFTOOL bpftool)
+if(NOT BPFTOOL)
+    find_program(BPFTOOL bpftool PATHS /usr/sbin /sbin)
+endif()
 if(NOT LIBBPF_FOUND)
     message(WARNING "libbpf not found (pkg-config) — NetworkModel BPF loading disabled")
+elseif(NOT BPFTOOL)
+    message(WARNING "bpftool not found — skeleton generation disabled")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -35,6 +43,7 @@ add_executable(ctopp ${CTOPP_SOURCES})
 
 target_include_directories(ctopp PRIVATE
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_BINARY_DIR}        # for generated traffic_monitor.skel.h
 )
 
 target_link_libraries(ctopp PRIVATE
@@ -44,12 +53,13 @@ target_link_libraries(ctopp PRIVATE
     OpenGL::GL
 )
 
-if(LIBBPF_FOUND)
+if(LIBBPF_FOUND AND BPFTOOL)
+    target_compile_definitions(ctopp PRIVATE HAS_LIBBPF)
     target_link_libraries(ctopp PRIVATE PkgConfig::LIBBPF)
 endif()
 
 # ---------------------------------------------------------------------------
-# BPF program (optional — requires clang targeting bpf)
+# BPF program (requires clang targeting bpf)
 # ---------------------------------------------------------------------------
 find_program(CLANG clang)
 if(CLANG)
@@ -77,4 +87,22 @@ if(CLANG)
     add_custom_target(bpf ALL DEPENDS ${BPF_OUTPUT})
 else()
     message(WARNING "clang not found — eBPF program will not be compiled")
+endif()
+
+# ---------------------------------------------------------------------------
+# BPF skeleton header (requires bpftool + clang)
+# ---------------------------------------------------------------------------
+if(BPFTOOL AND CLANG)
+    set(SKEL_HEADER ${CMAKE_CURRENT_BINARY_DIR}/traffic_monitor.skel.h)
+
+    add_custom_command(
+        OUTPUT  ${SKEL_HEADER}
+        COMMAND ${BPFTOOL} gen skeleton ${BPF_OUTPUT} > ${SKEL_HEADER}
+        DEPENDS ${BPF_OUTPUT}
+        COMMENT "Generating BPF skeleton header → traffic_monitor.skel.h"
+    )
+
+    add_custom_target(skel ALL DEPENDS ${SKEL_HEADER})
+    add_dependencies(skel bpf)
+    add_dependencies(ctopp skel)
 endif()
