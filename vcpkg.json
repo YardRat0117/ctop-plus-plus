@@ -1,0 +1,14 @@
+{
+  "name": "ctopp",
+  "version": "0.1.0",
+  "description": "eBPF-powered Linux system observability tool with MVVM architecture",
+  "dependencies": [
+    {
+      "name": "imgui",
+      "features": ["glfw-binding", "opengl3-binding"]
+    },
+    "implot",
+    "glfw3",
+    "libbpf"
+  ]
+}

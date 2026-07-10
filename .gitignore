@@ -1,0 +1,21 @@
+# Build
+build/
+out/
+*.o
+
+# vcpkg
+vcpkg_installed/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# BPF artifacts
+*.bpf.o
+*.skel.h
+
+# OS
+.DS_Store
+Thumbs.db
