@@ -7,31 +7,6 @@
 #include <cstdlib>
 
 // ---------------------------------------------------------------------------
-// Helper: set up a dockable ImGui window
-// ---------------------------------------------------------------------------
-static void setup_dockspace() {
-    ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->WorkPos);
-    ImGui::SetNextWindowSize(viewport->WorkSize);
-    ImGui::SetNextWindowViewport(viewport->ID);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoDocking
-                           | ImGuiWindowFlags_NoTitleBar
-                           | ImGuiWindowFlags_NoCollapse
-                           | ImGuiWindowFlags_NoResize
-                           | ImGuiWindowFlags_NoMove
-                           | ImGuiWindowFlags_NoBringToFrontOnFocus
-                           | ImGuiWindowFlags_NoNavFocus;
-
-    ImGui::Begin("DockSpace", nullptr, flags);
-    ImGui::PopStyleVar(2);
-    ImGui::DockSpace(ImGui::GetID("MainDockSpace"));
-    ImGui::End();
-}
-
-// ---------------------------------------------------------------------------
 // Tab: System Stats (placeholder — 同学 B fills real UI here)
 // ---------------------------------------------------------------------------
 static void render_sys_stats_tab() {
@@ -121,7 +96,6 @@ int main() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -137,8 +111,6 @@ int main() {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
-
-        setup_dockspace();
 
         // Tab bar
         if (ImGui::BeginTabBar("MainTabs")) {

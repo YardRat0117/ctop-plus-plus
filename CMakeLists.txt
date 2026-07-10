@@ -13,11 +13,11 @@ find_package(implot CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 
-# libbpf may be installed via vcpkg or system package manager.
-# Raise a warning but do not hard-fail — the BPF-dependent code is opt-in.
-find_package(libbpf QUIET)
-if(NOT libbpf_FOUND)
-    message(WARNING "libbpf not found — NetworkModel BPF loading will be disabled")
+# libbpf — opt-in via system pkg-config (not vcpkg).
+find_package(PkgConfig)
+pkg_check_modules(LIBBPF libbpf IMPORTED_TARGET)
+if(NOT LIBBPF_FOUND)
+    message(WARNING "libbpf not found (pkg-config) — NetworkModel BPF loading disabled")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -44,8 +44,8 @@ target_link_libraries(ctopp PRIVATE
     OpenGL::GL
 )
 
-if(libbpf_FOUND)
-    target_link_libraries(ctopp PRIVATE libbpf::libbpf)
+if(LIBBPF_FOUND)
+    target_link_libraries(ctopp PRIVATE PkgConfig::LIBBPF)
 endif()
 
 # ---------------------------------------------------------------------------
