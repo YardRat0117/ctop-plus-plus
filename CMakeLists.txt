@@ -13,11 +13,19 @@ find_package(implot CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 
-# libbpf may be installed via vcpkg or system package manager.
-# Raise a warning but do not hard-fail — the BPF-dependent code is opt-in.
-find_package(libbpf QUIET)
-if(NOT libbpf_FOUND)
-    message(WARNING "libbpf not found — NetworkModel BPF loading will be disabled")
+# libbpf — opt-in via system pkg-config (not vcpkg).
+# HAS_LIBBPF is only defined when BOTH libbpf and bpftool are present
+# (bpftool is required at build time for skeleton generation).
+find_package(PkgConfig)
+pkg_check_modules(LIBBPF libbpf IMPORTED_TARGET)
+find_program(BPFTOOL bpftool)
+if(NOT BPFTOOL)
+    find_program(BPFTOOL bpftool PATHS /usr/sbin /sbin)
+endif()
+if(NOT LIBBPF_FOUND)
+    message(WARNING "libbpf not found (pkg-config) — NetworkModel BPF loading disabled")
+elseif(NOT BPFTOOL)
+    message(WARNING "bpftool not found — skeleton generation disabled")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -35,6 +43,7 @@ add_executable(ctopp ${CTOPP_SOURCES})
 
 target_include_directories(ctopp PRIVATE
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_BINARY_DIR}        # for generated traffic_monitor.skel.h
 )
 
 target_link_libraries(ctopp PRIVATE
@@ -44,12 +53,13 @@ target_link_libraries(ctopp PRIVATE
     OpenGL::GL
 )
 
-if(libbpf_FOUND)
-    target_link_libraries(ctopp PRIVATE libbpf::libbpf)
+if(LIBBPF_FOUND AND BPFTOOL)
+    target_compile_definitions(ctopp PRIVATE HAS_LIBBPF)
+    target_link_libraries(ctopp PRIVATE PkgConfig::LIBBPF)
 endif()
 
 # ---------------------------------------------------------------------------
-# BPF program (optional — requires clang targeting bpf)
+# BPF program (requires clang targeting bpf)
 # ---------------------------------------------------------------------------
 find_program(CLANG clang)
 if(CLANG)
@@ -77,4 +87,44 @@ if(CLANG)
     add_custom_target(bpf ALL DEPENDS ${BPF_OUTPUT})
 else()
     message(WARNING "clang not found — eBPF program will not be compiled")
+endif()
+
+# ---------------------------------------------------------------------------
+# BPF skeleton header (requires bpftool + clang)
+# ---------------------------------------------------------------------------
+if(BPFTOOL AND CLANG)
+    set(SKEL_HEADER ${CMAKE_CURRENT_BINARY_DIR}/traffic_monitor.skel.h)
+
+    add_custom_command(
+        OUTPUT  ${SKEL_HEADER}
+        COMMAND ${BPFTOOL} gen skeleton ${BPF_OUTPUT} > ${SKEL_HEADER}
+        DEPENDS ${BPF_OUTPUT}
+        COMMENT "Generating BPF skeleton header → traffic_monitor.skel.h"
+    )
+
+    add_custom_target(skel ALL DEPENDS ${SKEL_HEADER})
+    add_dependencies(skel bpf)
+    add_dependencies(ctopp skel)
+endif()
+
+# ---------------------------------------------------------------------------
+# Pipeline smoke test — validates BPF → NetworkModel → NetViewModel chain.
+# Requires libbpf (system pkg-config).  Not built when libbpf is absent.
+# ---------------------------------------------------------------------------
+if(LIBBPF_FOUND AND BPFTOOL AND CLANG)
+    add_executable(pipe_test
+        test/pipeline_smoke.cpp
+        src/model/network_model.cpp
+        src/viewmodel/net_view_model.cpp
+    )
+    target_include_directories(pipe_test PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}        # for traffic_monitor.skel.h
+    )
+    target_compile_definitions(pipe_test PRIVATE HAS_LIBBPF)
+    target_link_libraries(pipe_test PRIVATE
+        PkgConfig::LIBBPF
+        Threads::Threads
+    )
+    add_dependencies(pipe_test skel)
 endif()

@@ -5,6 +5,7 @@
 #include <shared_mutex>
 #include <atomic>
 #include <cstdint>
+#include <unordered_map>
 
 namespace ctopp {
 
@@ -22,21 +23,25 @@ public:
     // Called by View (UI thread). Thread-safe read access.
     NetViewData get_data() const;
 
+    // Update the dropped-packet counter from NetworkModel.
+    void set_dropped(uint64_t count);
+
 private:
     mutable std::shared_mutex mutex_;
     NetViewData data_;
 
-    // Accumulators for the current second.
-    // Written by on_packet() (Model thread), read and reset by tick()
-    // (potentially from another thread).  std::atomic prevents the data
-    // race; minor in-flight packet loss during tick() is acceptable for
-    // statistics.
+    // Accumulators for the current second (atomic — Model thread writes,
+    // tick may be called from UI thread).
     std::atomic<uint64_t> bytes_in_  = 0;
     std::atomic<uint64_t> bytes_out_ = 0;
     std::atomic<uint64_t> pkt_count_ = 0;
     std::atomic<uint64_t> tcp_count_ = 0;
     std::atomic<uint64_t> udp_count_ = 0;
     std::atomic<uint64_t> icmp_count_ = 0;
+
+    // Cumulative per-IP byte counters for Top IP ranking.
+    // Accessed under mutex_ in on_packet() and tick().
+    std::unordered_map<uint32_t, uint64_t> ip_bytes_;
 };
 
 } // namespace ctopp
