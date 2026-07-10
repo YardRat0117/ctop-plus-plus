@@ -40,6 +40,9 @@ struct NetViewData {
     static constexpr size_t kMaxHistory = 60;
     std::deque<float> download_history;
     std::deque<float> upload_history;
+
+    // --- Drop counter ---
+    uint64_t dropped_count = 0;   // packets dropped due to ring buffer overflow
 };
 
 } // namespace ctopp

@@ -53,9 +53,9 @@ struct packet_meta {
 // ---- C callback bridge ----
 static int handle_event(void* ctx, void* data, size_t size) {
     auto* self = static_cast<NetworkModel*>(ctx);
-    if (!self || !data || size < sizeof(struct packet_meta)) return 0;
+    if (!self || !data || size < sizeof(packet_meta)) return 0;
 
-    auto* meta = static_cast<struct packet_meta*>(data);
+    auto* meta = static_cast<const packet_meta*>(data);
 
     PacketRecord pkt{};
     pkt.src_ip       = meta->src_ip;
@@ -80,13 +80,17 @@ static int handle_event(void* ctx, void* data, size_t size) {
                 pkt.protocol, pkt.length);
     }
 
-    self->callback_(pkt);
+    self->invoke_callback(pkt);
     return 0;
 }
 
 // ---- lifecycle ----
 NetworkModel::NetworkModel() : impl_(std::make_unique<Impl>()) {}
 NetworkModel::~NetworkModel() { stop(); }
+
+void NetworkModel::invoke_callback(const PacketRecord& pkt) {
+    if (callback_) callback_(pkt);
+}
 
 // ---- init ----
 bool NetworkModel::init(const std::string& iface,
@@ -276,7 +280,8 @@ uint64_t NetworkModel::dropped_packets() const {
     auto* skel = static_cast<traffic_monitor_bpf*>(impl_->skel);
     __u32 key = 0;
     __u64 val = 0;
-    bpf_map_lookup_elem(bpf_map__fd(skel->maps.drop_count), &key, &val);
+    bpf_map__lookup_elem(skel->maps.drop_count, &key, sizeof(key),
+                          &val, sizeof(val), 0);
     return val;
 }
 
@@ -291,6 +296,10 @@ namespace ctopp {
 
 NetworkModel::NetworkModel() : impl_(std::make_unique<Impl>()) {}
 NetworkModel::~NetworkModel() = default;
+
+void NetworkModel::invoke_callback(const PacketRecord& pkt) {
+    if (callback_) callback_(pkt);
+}
 
 bool NetworkModel::init(const std::string& iface,
                         const std::string& /*bpf_obj_path*/) {

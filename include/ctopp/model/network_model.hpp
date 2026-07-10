@@ -29,6 +29,9 @@ public:
 
     void set_callback(Callback cb) { callback_ = std::move(cb); }
 
+    // Called from the static ring buffer callback (implementation detail).
+    void invoke_callback(const PacketRecord& pkt);
+
     // Start polling the BPF ring buffer. Requires a successful init() and a
     // callback set first.
     void start();
