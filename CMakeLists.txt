@@ -106,3 +106,25 @@ if(BPFTOOL AND CLANG)
     add_dependencies(skel bpf)
     add_dependencies(ctopp skel)
 endif()
+
+# ---------------------------------------------------------------------------
+# Pipeline smoke test — validates BPF → NetworkModel → NetViewModel chain.
+# Requires libbpf (system pkg-config).  Not built when libbpf is absent.
+# ---------------------------------------------------------------------------
+if(LIBBPF_FOUND AND BPFTOOL AND CLANG)
+    add_executable(pipe_test
+        test/pipeline_smoke.cpp
+        src/model/network_model.cpp
+        src/viewmodel/net_view_model.cpp
+    )
+    target_include_directories(pipe_test PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_BINARY_DIR}        # for traffic_monitor.skel.h
+    )
+    target_compile_definitions(pipe_test PRIVATE HAS_LIBBPF)
+    target_link_libraries(pipe_test PRIVATE
+        PkgConfig::LIBBPF
+        Threads::Threads
+    )
+    add_dependencies(pipe_test skel)
+endif()
