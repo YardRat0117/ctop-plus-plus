@@ -1,0 +1,27 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "vcpkg",
+      "displayName": "Configure with vcpkg",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    },
+    {
+      "name": "system",
+      "displayName": "Configure with system packages",
+      "description": "Use system-installed libraries (apt, dnf, etc.)"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "vcpkg",
+      "configuration": "Debug"
+    },
+    {
+      "name": "release",
+      "configurePreset": "vcpkg",
+      "configuration": "Release"
+    }
+  ]
+}

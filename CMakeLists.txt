@@ -1,0 +1,71 @@
+cmake_minimum_required(VERSION 3.20)
+project(ctopp VERSION 0.1.0 LANGUAGES CXX C)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# ---------------------------------------------------------------------------
+# Dependencies (vcpkg preferred, system fallback)
+# ---------------------------------------------------------------------------
+find_package(imgui CONFIG REQUIRED)
+find_package(implot CONFIG REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
+find_package(OpenGL REQUIRED)
+
+# libbpf may be installed via vcpkg or system package manager.
+# Raise a warning but do not hard-fail — the BPF-dependent code is opt-in.
+find_package(libbpf QUIET)
+if(NOT libbpf_FOUND)
+    message(WARNING "libbpf not found — NetworkModel BPF loading will be disabled")
+endif()
+
+# ---------------------------------------------------------------------------
+# Main executable
+# ---------------------------------------------------------------------------
+set(CTOPP_SOURCES
+    src/main.cpp
+    src/model/sys_stats_model.cpp
+    src/model/network_model.cpp
+    src/viewmodel/sys_view_model.cpp
+    src/viewmodel/net_view_model.cpp
+)
+
+add_executable(ctopp ${CTOPP_SOURCES})
+
+target_include_directories(ctopp PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(ctopp PRIVATE
+    imgui::imgui
+    implot::implot
+    glfw
+    OpenGL::GL
+)
+
+if(libbpf_FOUND)
+    target_link_libraries(ctopp PRIVATE libbpf::libbpf)
+endif()
+
+# ---------------------------------------------------------------------------
+# BPF program (optional — requires clang targeting bpf)
+# ---------------------------------------------------------------------------
+find_program(CLANG clang)
+if(CLANG)
+    set(BPF_SOURCE  ${CMAKE_SOURCE_DIR}/bpf/traffic_monitor.bpf.c)
+    set(BPF_OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/traffic_monitor.bpf.o)
+
+    add_custom_command(
+        OUTPUT  ${BPF_OUTPUT}
+        COMMAND ${CLANG} -target bpf -O2 -g -Wall
+                -I${CMAKE_SOURCE_DIR}/include
+                -c ${BPF_SOURCE} -o ${BPF_OUTPUT}
+        DEPENDS ${BPF_SOURCE}
+        COMMENT "Compiling eBPF program → traffic_monitor.bpf.o"
+    )
+
+    add_custom_target(bpf ALL DEPENDS ${BPF_OUTPUT})
+else()
+    message(WARNING "clang not found — eBPF program will not be compiled")
+endif()
