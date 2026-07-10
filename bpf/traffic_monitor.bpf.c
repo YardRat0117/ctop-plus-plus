@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #include <linux/bpf.h>
 #include <linux/pkt_cls.h>
+#include <linux/if_ether.h>
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
@@ -11,6 +12,16 @@ struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 256 * 1024); // 256 KB
 } packet_events SEC(".maps");
+
+// ---------------------------------------------------------------------------
+// Drop counter — incremented when the ring buffer is full.
+// ---------------------------------------------------------------------------
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u64);
+} drop_count SEC(".maps");
 
 // ---------------------------------------------------------------------------
 // Packet metadata (must match userspace PacketRecord layout).
@@ -38,67 +49,52 @@ int traffic_monitor(struct __sk_buff *skb) {
     struct packet_meta *meta = bpf_ringbuf_reserve(&packet_events,
                                                     sizeof(*meta), 0);
     if (!meta) {
-        // Ring buffer full — drop this packet (count could be exposed via
-        // a perf_event_array or per-CPU map in the future).
+        // Ring buffer full — increment drop counter.
+        __u32 key = 0;
+        __u64 *cnt = bpf_map_lookup_elem(&drop_count, &key);
+        if (cnt) __sync_fetch_and_add(cnt, 1);
         return TC_ACT_OK;
     }
 
-    // --- Parse Ethernet header (14 bytes) ---
+    // TC clsact: skb->data points directly to the IP header (L3).
     // skb->data / skb->data_end bounds checking is required by the verifier.
     void *data     = (void *)(long)skb->data;
     void *data_end = (void *)(long)skb->data_end;
 
-    // Ethernet header: 6 (dst MAC) + 6 (src MAC) + 2 (ethertype)
-    if (data + 14 > data_end)
-        goto drop;
-
-    __u16 eth_proto = *(volatile __u16 *)(data + 12);
-    __be16 eth_proto_be = __bpf_htons(eth_proto); // htons for verifier-friendly comparison
-    int ip_offset = 14;
-
-    // --- Handle VLAN (802.1Q) — optional, 4 extra bytes ---
-    if (eth_proto_be == 0x8100) {
-        if (data + 18 > data_end)
-            goto drop;
-        eth_proto_be = __bpf_htons(*(volatile __u16 *)(data + 16));
-        ip_offset = 18;
-    }
-
-    // --- Only process IPv4 ---
-    if (eth_proto_be != 0x0800)
+    // Only process IPv4
+    if (skb->protocol != bpf_htons(ETH_P_IP))
         goto drop;
 
     // --- Parse IPv4 header (minimum 20 bytes) ---
-    if (data + ip_offset + 20 > data_end)
+    if (data + 20 > data_end)
         goto drop;
 
-    __u8  ip_ver_ihl = *(volatile __u8 *)(data + ip_offset);
-    __u8  ip_ihl     = ip_ver_ihl & 0x0F;          // header length in 32-bit words
+    __u8  ip_ver_ihl = *(volatile __u8 *)(data);
+    __u8  ip_ihl     = ip_ver_ihl & 0x0F;
     if (ip_ihl < 5)
         goto drop;
 
     int ip_hdr_len = ip_ihl * 4;
 
     // Protocol field (TCP=6, UDP=17, ICMP=1)
-    __u8 protocol = *(volatile __u8 *)(data + ip_offset + 9);
+    __u8 protocol = *(volatile __u8 *)(data + 9);
     if (protocol != 6 && protocol != 17 && protocol != 1)
         goto drop;
 
     // Source / destination IP
-    __u32 src_ip  = *(volatile __u32 *)(data + ip_offset + 12);
-    __u32 dest_ip = *(volatile __u32 *)(data + ip_offset + 16);
+    __u32 src_ip  = *(volatile __u32 *)(data + 12);
+    __u32 dest_ip = *(volatile __u32 *)(data + 16);
 
     // --- Parse transport layer ports (TCP/UDP only) ---
     __u16 src_port  = 0;
     __u16 dest_port = 0;
 
     if (protocol == 6 || protocol == 17) {
-        // TCP/UDP header starts right after IP header
-        if (data + ip_offset + ip_hdr_len + 4 > data_end)
+        if (data + ip_hdr_len + 4 > data_end)
             goto drop;
 
-        src_port  = __bpf_htons(*(volatile __u16 *)(data + ip_offset + ip_hdr_len));
-        dest_port = __bpf_htons(*(volatile __u16 *)(data + ip_offset + ip_hdr_len + 2));
+        src_port  = __bpf_htons(*(volatile __u16 *)(data + ip_hdr_len));
+        dest_port = __bpf_htons(*(volatile __u16 *)(data + ip_hdr_len + 2));
     }
 
     // --- Fill metadata ---
