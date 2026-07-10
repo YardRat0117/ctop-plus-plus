@@ -3,6 +3,7 @@
 #include "ctopp/model/packet_record.hpp"
 #include "ctopp/viewmodel/net_view_data.hpp"
 #include <shared_mutex>
+#include <atomic>
 #include <cstdint>
 
 namespace ctopp {
@@ -25,14 +26,17 @@ private:
     mutable std::shared_mutex mutex_;
     NetViewData data_;
 
-    // Accumulators for the current second (no lock needed — only written
-    // by on_packet / tick from the Model thread).
-    uint64_t bytes_in_     = 0;
-    uint64_t bytes_out_    = 0;
-    uint64_t pkt_count_    = 0;
-    uint64_t tcp_count_    = 0;
-    uint64_t udp_count_    = 0;
-    uint64_t icmp_count_   = 0;
+    // Accumulators for the current second.
+    // Written by on_packet() (Model thread), read and reset by tick()
+    // (potentially from another thread).  std::atomic prevents the data
+    // race; minor in-flight packet loss during tick() is acceptable for
+    // statistics.
+    std::atomic<uint64_t> bytes_in_  = 0;
+    std::atomic<uint64_t> bytes_out_ = 0;
+    std::atomic<uint64_t> pkt_count_ = 0;
+    std::atomic<uint64_t> tcp_count_ = 0;
+    std::atomic<uint64_t> udp_count_ = 0;
+    std::atomic<uint64_t> icmp_count_ = 0;
 };
 
 } // namespace ctopp

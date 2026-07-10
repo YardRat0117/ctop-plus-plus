@@ -62,10 +62,13 @@ void NetViewModel::tick() {
     std::unique_lock lock(mutex_);
 
     if (pkt_count_ > 0) {
-        uint64_t total_proto = tcp_count_ + udp_count_ + icmp_count_;
-        data_.tcp_pct   = total_proto > 0 ? (100.0f * tcp_count_  / total_proto) : 0.0f;
-        data_.udp_pct   = total_proto > 0 ? (100.0f * udp_count_  / total_proto) : 0.0f;
-        data_.icmp_pct  = total_proto > 0 ? (100.0f * icmp_count_ / total_proto) : 0.0f;
+        uint64_t tcp  = tcp_count_;
+        uint64_t udp  = udp_count_;
+        uint64_t icmp = icmp_count_;
+        uint64_t total_proto = tcp + udp + icmp;
+        data_.tcp_pct   = total_proto > 0 ? (100.0f * tcp  / total_proto) : 0.0f;
+        data_.udp_pct   = total_proto > 0 ? (100.0f * udp  / total_proto) : 0.0f;
+        data_.icmp_pct  = total_proto > 0 ? (100.0f * icmp / total_proto) : 0.0f;
 
         data_.download_kbps = static_cast<float>(bytes_in_)  / 1024.0f;
         data_.upload_kbps   = static_cast<float>(bytes_out_) / 1024.0f;
