@@ -56,10 +56,19 @@ if(CLANG)
     set(BPF_SOURCE  ${CMAKE_SOURCE_DIR}/bpf/traffic_monitor.bpf.c)
     set(BPF_OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/traffic_monitor.bpf.o)
 
+    # Multiarch include path for <asm/types.h> (e.g. /usr/include/x86_64-linux-gnu).
+    set(BPF_ARCH_INCLUDE /usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
+    if(EXISTS "${BPF_ARCH_INCLUDE}")
+        set(BPF_ARCH_FLAG -I${BPF_ARCH_INCLUDE})
+    else()
+        set(BPF_ARCH_FLAG "")
+    endif()
+
     add_custom_command(
         OUTPUT  ${BPF_OUTPUT}
         COMMAND ${CLANG} -target bpf -O2 -g -Wall
                 -I${CMAKE_SOURCE_DIR}/include
+                ${BPF_ARCH_FLAG}
                 -c ${BPF_SOURCE} -o ${BPF_OUTPUT}
         DEPENDS ${BPF_SOURCE}
         COMMENT "Compiling eBPF program → traffic_monitor.bpf.o"

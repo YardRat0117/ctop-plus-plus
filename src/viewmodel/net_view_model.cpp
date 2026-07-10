@@ -1,4 +1,5 @@
 #include "ctopp/viewmodel/net_view_model.hpp"
+#include <mutex>
 #include <unordered_map>
 #include <algorithm>
 #include <cstring>
