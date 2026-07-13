@@ -16,6 +16,8 @@ struct SysViewData {
     uint64_t mem_avail_gb = 0;
     float disk_read_mbps = 0.0f;
     float disk_write_mbps = 0.0f;
+    float net_rx_mbps = 0.0f;
+    float net_tx_mbps = 0.0f;
 
     // --- History (for line charts, up to 60 data points = 60 seconds) ---
     static constexpr size_t kMaxHistory = 60;
