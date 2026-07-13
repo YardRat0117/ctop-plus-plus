@@ -1,0 +1,26 @@
+# =============================================================================
+# ctop++ 中期报告 PDF 生成
+# =============================================================================
+# 使用方法：
+#   cd docs && ./build-report-pdf.sh
+# =============================================================================
+
+FROM texlive/texlive:latest
+
+# 安装 pandoc
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \
+    pandoc \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /docs
+
+CMD ["sh", "-c", "pandoc mid-term-report.md -o mid-term-report.pdf \
+    --pdf-engine=xelatex \
+    -V CJKmainfont='FandolSong' \
+    -V mainfont='FandolSong' \
+    -V monofont='FandolHei' \
+    -V fontsize=11pt \
+    -V geometry:margin=1in \
+    --highlight-style=tango \
+    --toc \
+    -V title='ctop++ 系统可观测性工具 — 中期报告'"]
