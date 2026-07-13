@@ -167,7 +167,7 @@ bool parse_diskstats(std::istream& input,
 bool parse_net_dev(std::istream& input, NetCounters& counters,
                    bool include_loopback) {
     NetCounters parsed;
-    bool found_interface = false;
+    bool found_data_line = false;
     std::string text;
 
     while (std::getline(input, text)) {
@@ -176,7 +176,6 @@ bool parse_net_dev(std::istream& input, NetCounters& counters,
 
         const std::string interface_name = trim(text.substr(0, separator));
         if (interface_name.empty()) continue;
-        if (!include_loopback && interface_name == "lo") continue;
 
         std::istringstream fields(text.substr(separator + 1));
         uint64_t rx_bytes = 0;
@@ -188,12 +187,14 @@ bool parse_net_dev(std::istream& input, NetCounters& counters,
         }
         if (!(fields >> tx_bytes)) return false;
 
-        parsed.rx_bytes += rx_bytes;
-        parsed.tx_bytes += tx_bytes;
-        found_interface = true;
+        found_data_line = true;
+        if (include_loopback || interface_name != "lo") {
+            parsed.rx_bytes += rx_bytes;
+            parsed.tx_bytes += tx_bytes;
+        }
     }
 
-    if (!found_interface) return false;
+    if (!found_data_line) return false;
     counters = parsed;
     return true;
 }

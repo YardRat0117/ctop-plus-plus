@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(ctopp VERSION 0.1.0 LANGUAGES CXX C)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -130,4 +132,35 @@ if(LIBBPF_FOUND AND BPFTOOL AND CLANG)
         Threads::Threads
     )
     add_dependencies(pipe_test skel)
+endif()
+
+# ---------------------------------------------------------------------------
+# System statistics tests — no UI or libbpf dependency.
+# ---------------------------------------------------------------------------
+if(BUILD_TESTING)
+    add_executable(sys_stats_test
+        test/sys_stats_test.cpp
+        src/model/sys_stats_reader.cpp
+        src/viewmodel/sys_view_model.cpp
+    )
+    target_include_directories(sys_stats_test PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src/model
+    )
+    target_link_libraries(sys_stats_test PRIVATE Threads::Threads)
+    add_test(NAME sys_stats_unit COMMAND sys_stats_test)
+
+    add_executable(sys_stats_smoke
+        test/sys_stats_smoke.cpp
+        src/model/sys_stats_model.cpp
+        src/model/sys_stats_reader.cpp
+        src/viewmodel/sys_view_model.cpp
+    )
+    target_include_directories(sys_stats_smoke PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src/model
+    )
+    target_link_libraries(sys_stats_smoke PRIVATE Threads::Threads)
+    add_test(NAME sys_stats_pipeline COMMAND sys_stats_smoke)
+    set_tests_properties(sys_stats_pipeline PROPERTIES TIMEOUT 6)
 endif()
