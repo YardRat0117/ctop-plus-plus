@@ -8,7 +8,7 @@
 #include <cstring>
 #include <string>
 #include <memory>
-#include <cmath>
+#include <algorithm>
 
 // ---------------------------------------------------------------------------
 // Network pipeline (Model → ViewModel)
@@ -206,8 +206,8 @@ static void render_net_traffic_tab() {
                 ImPlotFlags_NoTitle | ImPlotFlags_NoMenus))
         {
             ImPlot::SetupAxes("Time (s)", "KB/s");
-            ImPlot::SetupAxisLimits(ImAxis_X1, 0, 60, ImGuiCond_Once);
-            ImPlot::SetupAxisLimits(ImAxis_Y1, 0, ImGuiCond_Once);
+            ImPlot::SetupAxisLimits(ImAxis_X1, 0, 60, ImGuiCond_Always);
+            // Y-axis auto-scales to fit visible data — no fixed limits set.
 
             if (!dl_ys.empty())
                 ImPlot::PlotLine("Download", dl_xs.data(), dl_ys.data(),
@@ -239,47 +239,62 @@ static void render_net_traffic_tab() {
     }
 
     // ===================================================================
-    // 3. Top IP bar chart + Protocol pie chart (side by side)
+    // 3. Top IP table (netstat style) + Protocol pie chart (side by side)
     // ===================================================================
     {
-        // Use the remaining horizontal space: half each
         float remaining = ImGui::GetContentRegionAvail().y;
-        float chart_h   = std::max(remaining - 10.0f, 200.0f);
+        float avail_h   = std::max(remaining - 10.0f, 200.0f);
         float avail_w   = ImGui::GetContentRegionAvail().x;
 
-        // --- Top IP bar chart (left half) ---
-        if (ImPlot::BeginPlot("##TopTalkers", ImVec2(avail_w * 0.5f, chart_h),
-                ImPlotFlags_NoTitle | ImPlotFlags_NoMenus))
+        // --- Top IP table (left half) ---
         {
-            ImPlot::SetupAxes("Bytes", "");
+            float table_h = avail_h;
+            if (ImGui::BeginTable("TopTalkers", 3,
+                    ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                    ImGuiTableFlags_ScrollY,
+                    ImVec2(avail_w * 0.5f, table_h)))
+            {
+                ImGui::TableSetupColumn("#",   ImGuiTableColumnFlags_WidthFixed, 24);
+                ImGui::TableSetupColumn("IP",  ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableSetupColumn("Bytes", ImGuiTableColumnFlags_WidthFixed, 80);
+                ImGui::TableSetupScrollFreeze(0, 0);
+                ImGui::TableHeadersRow();
 
-            if (!data.top_talkers.empty()) {
-                // Build arrays from top_talkers (reverse order so #1 is at top)
-                size_t n = data.top_talkers.size();
-                std::vector<double> vals(n);
-                std::vector<double> y_pos(n);
-                std::vector<const char*> lbls(n);
-                for (size_t i = 0; i < n; ++i) {
-                    vals[n - 1 - i] = static_cast<double>(data.top_talkers[i].bytes);
-                    y_pos[i] = static_cast<double>(i);
-                    lbls[i]  = data.top_talkers[n - 1 - i].ip.c_str();
+                if (!data.top_talkers.empty()) {
+                    for (size_t i = 0; i < data.top_talkers.size(); ++i) {
+                        ImGui::TableNextRow();
+
+                        // Rank
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::Text("%zu", i + 1);
+
+                        // IP
+                        ImGui::TableSetColumnIndex(1);
+                        ImGui::TextUnformatted(data.top_talkers[i].ip.c_str());
+
+                        // Bytes (human-readable)
+                        ImGui::TableSetColumnIndex(2);
+                        uint64_t b = data.top_talkers[i].bytes;
+                        if (b >= 1024 * 1024)
+                            ImGui::Text("%.1f MB", b / (1024.0 * 1024.0));
+                        else if (b >= 1024)
+                            ImGui::Text("%.1f KB", b / 1024.0);
+                        else
+                            ImGui::Text("%lu B", (unsigned long)b);
+                    }
+                } else {
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    ImGui::TextColored(ImVec4(0.5f,0.5f,0.5f,1), "(no data)");
                 }
-
-                ImPlot::SetupAxisLimits(ImAxis_Y1, -0.5, n - 0.5);
-                ImPlot::SetupAxisTicks(ImAxis_Y1, y_pos.data(), (int)n, lbls.data());
-
-                // Draw horizontal bars
-                ImPlot::PlotBars("##ipbars", vals.data(), (int)n, 0.6, 0,
-                                 ImPlotSpec(ImPlotProp_Flags,
-                                            ImPlotBarsFlags_Horizontal));
+                ImGui::EndTable();
             }
-            ImPlot::EndPlot();
         }
 
         ImGui::SameLine();
 
-        // --- Protocol pie chart (right half) ---
-        if (ImPlot::BeginPlot("##ProtocolPie", ImVec2(avail_w * 0.5f, chart_h),
+        // --- Protocol pie chart (kept for future HTTP methods stats) ---
+        if (ImPlot::BeginPlot("##ProtocolPie", ImVec2(avail_w * 0.5f, avail_h),
                 ImPlotFlags_NoTitle | ImPlotFlags_NoMenus |
                 ImPlotFlags_Equal))
         {
@@ -290,7 +305,6 @@ static void render_net_traffic_tab() {
             double pie_vals[3] = {data.tcp_pct, data.udp_pct, data.icmp_pct};
             const char* pie_lbls[3] = {"TCP", "UDP", "ICMP"};
 
-            // Only draw if there's data
             if (pie_vals[0] + pie_vals[1] + pie_vals[2] > 0) {
                 ImPlot::PlotPieChart(pie_lbls, pie_vals, 3, 0, 0, 0.85,
                                      "%.1f%%", 90,
