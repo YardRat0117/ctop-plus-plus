@@ -5,6 +5,23 @@
 #include <GLFW/glfw3.h>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
+#include <memory>
+#include <atomic>
+
+// ---------------------------------------------------------------------------
+// Network pipeline (Model → ViewModel)
+// ---------------------------------------------------------------------------
+#include "ctopp/model/network_model.hpp"
+#include "ctopp/viewmodel/net_view_model.hpp"
+
+// File-scope network pipeline state
+static ctopp::NetworkModel      g_net;
+static ctopp::NetViewModel       g_vm;
+static std::atomic<bool>        g_net_initialized{false};
+static std::string              g_iface = "lo";
+static std::string              g_net_error;
+static bool                     g_net_paused = false;
 
 // ---------------------------------------------------------------------------
 // Tab: System Stats (placeholder — 同学 B fills real UI here)
@@ -72,7 +89,30 @@ static void render_net_traffic_tab() {
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-int main() {
+int main(int argc, char** argv) {
+    // Parse command-line: optional interface name
+    if (argc > 1)
+        g_iface = argv[1];
+
+    // --- Initialise Network pipeline ---
+    {
+        g_net.set_callback([](const ctopp::PacketRecord& pkt) {
+            g_vm.on_packet(pkt);
+        });
+
+        if (g_net.init(g_iface)) {
+            g_net.start();
+            g_net_initialized = true;
+            g_net_paused = false;
+            fprintf(stderr, "[main] Network pipeline OK (iface=%s)\n",
+                    g_iface.c_str());
+        } else {
+            g_net_error = "BPF init failed — try: sudo ./ctopp <iface>";
+            fprintf(stderr, "[main] Network pipeline FAILED (iface=%s)\n",
+                    g_iface.c_str());
+        }
+    }
+
     // --- GLFW ---
     if (!glfwInit()) {
         fprintf(stderr, "GLFW init failed\n");
@@ -112,12 +152,31 @@ int main() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
+        // Root window fills the viewport
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+
+        ImGui::Begin("ctop++", nullptr,
+                     ImGuiWindowFlags_NoTitleBar |
+                     ImGuiWindowFlags_NoResize |
+                     ImGuiWindowFlags_NoMove |
+                     ImGuiWindowFlags_NoScrollbar |
+                     ImGuiWindowFlags_NoScrollWithMouse |
+                     ImGuiWindowFlags_NoBringToFrontOnFocus |
+                     ImGuiWindowFlags_NoNav);
+
+        ImGui::PopStyleVar(2);
+
         // Tab bar
-        if (ImGui::BeginTabBar("MainTabs")) {
+        if (ImGui::BeginTabBar("MainTabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
             render_sys_stats_tab();
             render_net_traffic_tab();
             ImGui::EndTabBar();
         }
+
+        ImGui::End(); // root window
 
         ImGui::Render();
 
@@ -132,6 +191,12 @@ int main() {
     }
 
     // --- Cleanup ---
+    // Stop network pipeline first (before ImGui/GLFW teardown)
+    if (g_net_initialized) {
+        g_net.stop();
+        fprintf(stderr, "[main] Network pipeline stopped\n");
+    }
+
     ImPlot::DestroyContext();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
