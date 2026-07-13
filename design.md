@@ -175,11 +175,11 @@ struct SysViewData {
 class SysViewModel {
 public:
     void on_snapshot(const SysStatsSnapshot& snap);  // Model 回调入口
-    const SysViewData& get_data() const;              // View 只读访问
+    SysViewData get_data() const;                     // View 获取线程安全快照
 };
 ```
 
-**聚合逻辑：** 每次收到 `SysStatsSnapshot` 后更新 `SysViewData`，CPU 百分比用两次差值除以总时间差计算，历史队列上限 60 点。
+**聚合逻辑：** Model 根据相邻采样计算 CPU 百分比及磁盘、网络速率；ViewModel 接收 `SysStatsSnapshot` 后完成显示单位转换，并维护上限为 60 个点的 CPU、内存历史队列。`get_data()` 按值返回快照，避免 View 在锁释放后持有仍可能被工作线程修改的内部引用。
 
 ### 4.2 NetViewModel
 
