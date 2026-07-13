@@ -12,6 +12,7 @@ find_package(imgui CONFIG REQUIRED)
 find_package(implot CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
+find_package(Threads REQUIRED)
 
 # libbpf — opt-in via system pkg-config (not vcpkg).
 # HAS_LIBBPF is only defined when BOTH libbpf and bpftool are present
@@ -34,6 +35,7 @@ endif()
 set(CTOPP_SOURCES
     src/main.cpp
     src/model/sys_stats_model.cpp
+    src/model/sys_stats_reader.cpp
     src/model/network_model.cpp
     src/viewmodel/sys_view_model.cpp
     src/viewmodel/net_view_model.cpp
@@ -51,6 +53,7 @@ target_link_libraries(ctopp PRIVATE
     implot::implot
     glfw
     OpenGL::GL
+    Threads::Threads
 )
 
 if(LIBBPF_FOUND AND BPFTOOL)
