@@ -164,6 +164,8 @@ struct SysViewData {
     uint64_t mem_avail_gb;
     float    disk_read_mbps;
     float    disk_write_mbps;
+    float    net_rx_mbps;
+    float    net_tx_mbps;
 
     // 历史数据（供折线图，最近 60 个采样点）
     std::deque<float> cpu_history;

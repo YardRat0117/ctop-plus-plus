@@ -39,8 +39,11 @@
 | `include/ctopp/model/sys_stats_model.hpp` | 类接口声明（C 定义） |
 | `include/ctopp/viewmodel/sys_view_data.hpp` | 数据契约（C 定义） |
 | `include/ctopp/viewmodel/sys_view_model.hpp` | 类接口声明（C 定义） |
-| `src/model/sys_stats_model.cpp` | **A 实现**：/proc 文件读取、数据采集 |
-| `src/viewmodel/sys_view_model.cpp` | **A 实现**：聚合逻辑、CPU 差值计算 |
+| `src/model/sys_stats_reader.hpp/.cpp` | **A 实现**：`/proc` 解析和采样差分计算 |
+| `src/model/sys_stats_model.cpp` | **A 实现**：1 Hz 轮询、数据采集和回调通知 |
+| `src/viewmodel/sys_view_model.cpp` | **A 实现**：显示单位转换和历史队列 |
+| `test/sys_stats_test.cpp` | **A 实现**：解析、差分和 ViewModel 单元测试 |
+| `test/sys_stats_smoke.cpp` | **A 实现**：Linux 真实采集链路测试 |
 
 ### 同学 B — View 层
 

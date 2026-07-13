@@ -30,6 +30,21 @@ cmake --build build
 sudo ./build/ctopp
 ```
 
+## 测试
+
+系统资源管线提供不依赖 root 或 eBPF 的单元测试，以及读取真实
+`/proc`、`/sys` 数据的 Linux 冒烟测试：
+
+```bash
+cmake --build build --target sys_stats_test sys_stats_smoke
+ctest --test-dir build -R sys_stats --output-on-failure
+```
+
+- `sys_stats_test`：使用固定文本验证 `/proc` 解析、采样差分和
+  `SysViewModel` 数据转换。
+- `sys_stats_smoke`：运行约 2 秒，验证
+  `SysStatsModel -> SysViewModel` 的真实采集链路；不需要 root。
+
 ## 开发注意事项
 
 ### C++ 头文件
