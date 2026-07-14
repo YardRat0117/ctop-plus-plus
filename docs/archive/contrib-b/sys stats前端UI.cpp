@@ -1,0 +1,135 @@
+// Tab: System Stats
+// ---------------------------------------------------------------------------
+static void render_sys_stats_tab() {
+    if (!ImGui::BeginTabItem("System Stats"))
+        return;
+
+    // 静态全局时序缓存（滑动窗口60秒）
+    static std::deque<float> g_cpu_history;
+    static std::deque<float> g_mem_history;
+    static std::chrono::steady_clock::time_point last_sys_tick;
+
+    // 系统实时指标
+    static float cur_cpu_usage = 0.0f;
+    static float cur_mem_usage_pct = 0.0f;
+    static uint64_t mem_total_mb = 0;
+    static uint64_t mem_used_mb = 0;
+    static float disk_usage_pct = 0.0f;
+
+    // 1Hz 刷新系统指标（和网络面板tick逻辑完全一致）
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_sys_tick >= std::chrono::seconds(1))
+    {
+        // ======================
+        // 【此处替换真实系统读取逻辑】
+        // Linux下读取 /proc/stat /proc/meminfo 获取真实数据
+        // 这里先用模拟值演示，同学可替换成真实采集代码
+        // ======================
+        cur_cpu_usage  = 12.0f + rand() % 70;
+        cur_mem_usage_pct = 30.0f + rand() % 40;
+        mem_total_mb = 16384;
+        mem_used_mb  = static_cast<uint64_t>(mem_total_mb * cur_mem_usage_pct / 100.0f);
+        disk_usage_pct = 25.0f + rand() % 50;
+
+        // 滑动窗口保存60秒数据，超过则弹出头部旧数据
+        g_cpu_history.push_back(cur_cpu_usage);
+        g_mem_history.push_back(cur_mem_usage_pct);
+        if (g_cpu_history.size() > 60) g_cpu_history.pop_front();
+        if (g_mem_history.size() > 60) g_mem_history.pop_front();
+
+        last_sys_tick = now;
+    }
+
+    // ---------------------- 顶部状态栏 ----------------------
+    {
+        ImGui::TextUnformatted("System Monitor");
+        ImGui::SameLine(0, 20);
+        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.4f, 1.0f), "\xe2\x97\x86  Collecting");
+    }
+    ImGui::Separator();
+
+    // ---------------------- CPU 进度条 ----------------------
+    ImGui::Text("CPU Usage");
+    ImGui::SameLine();
+    char cpu_label[32];
+    snprintf(cpu_label, sizeof(cpu_label), "%.1f%%", cur_cpu_usage);
+    ImGui::ProgressBar(cur_cpu_usage / 100.0f, ImVec2(-1, 0), cpu_label);
+
+    // ---------------------- Memory 进度条 ----------------------
+    ImGui::Text("Memory  ");
+    ImGui::SameLine();
+    char mem_label[64];
+    snprintf(mem_label, sizeof(mem_label), "%.1f%% | %lu MB / %lu MB",
+             cur_mem_usage_pct, mem_used_mb, mem_total_mb);
+    ImGui::ProgressBar(cur_mem_usage_pct / 100.0f, ImVec2(-1, 0), mem_label);
+
+    // ---------------------- Disk 进度条 ----------------------
+    ImGui::Text("Disk    ");
+    ImGui::SameLine();
+    char disk_label[32];
+    snprintf(disk_label, sizeof(disk_label), "%.1f%%", disk_usage_pct);
+    ImGui::ProgressBar(disk_usage_pct / 100.0f, ImVec2(-1, 0), disk_label);
+
+    ImGui::Separator();
+    ImGui::Text("Resource History (last 60 s)");
+    ImGui::SameLine();
+    ImGui::TextDisabled("CPU + Memory");
+
+    // ---------------------- 资源历史折线图（复用deque_to_arrays） ----------------------
+    if (!g_cpu_history.empty() || !g_mem_history.empty())
+    {
+        std::vector<float> cpu_ys, cpu_xs, mem_ys, mem_xs;
+        deque_to_arrays(g_cpu_history, cpu_ys, cpu_xs);
+        deque_to_arrays(g_mem_history, mem_ys, mem_xs);
+
+        if (ImPlot::BeginPlot("##SysHistoryPlot", ImVec2(-1, 200),
+                ImPlotFlags_NoTitle | ImPlotFlags_NoMenus))
+        {
+            ImPlot::SetupAxes("Time (s)", "Usage %");
+            ImPlot::SetupAxisLimits(ImAxis_X1, 0, 60, ImGuiCond_Always);
+            ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 100, ImGuiCond_Always);
+
+            // CPU曲线（蓝色）
+            if (!cpu_ys.empty())
+            {
+                ImPlot::SetNextLineStyle(ImVec4(0.3f,0.6f,1.0f,1.0f));
+                ImPlot::PlotLine("CPU", cpu_xs.data(), cpu_ys.data(), (int)cpu_ys.size());
+
+                char anno[64];
+                snprintf(anno, sizeof(anno), "CPU: %.1f%%", cur_cpu_usage);
+                ImPlot::Annotation(cpu_xs.back(), cpu_ys.back(),
+                    ImVec4(0.3f,0.6f,1.0f,1), ImVec2(0,0), false, "%s", anno);
+            }
+            // 内存曲线（绿色）
+            if (!mem_ys.empty())
+            {
+                ImPlot::SetNextLineStyle(ImVec4(0.3f,1.0f,0.4f,1.0f));
+                ImPlot::PlotLine("Memory", mem_xs.data(), mem_ys.data(), (int)mem_ys.size());
+
+                char anno[64];
+                snprintf(anno, sizeof(anno), "MEM: %.1f%%", cur_mem_usage_pct);
+                ImPlot::Annotation(mem_xs.back(), mem_ys.back(),
+                    ImVec4(0.3f,1.0f,0.4f,1), ImVec2(0,0), false, "%s", anno);
+            }
+            ImPlot::EndPlot();
+        }
+    }
+    else
+    {
+        ImGui::TextDisabled("History chart — waiting for data...");
+    }
+
+    ImGui::Separator();
+
+    // ---------------------- 底部系统汇总文字（对齐网络面板底部格式） ----------------------
+    {
+        ImGui::Spacing();
+        char buf[256];
+        snprintf(buf, sizeof(buf),
+            "CPU: %.1f%%  |  Memory Used: %lu MB / %lu MB  |  Disk Usage: %.1f%%",
+            cur_cpu_usage, mem_used_mb, mem_total_mb, disk_usage_pct);
+        ImGui::TextUnformatted(buf);
+    }
+
+    ImGui::EndTabItem();
+}
