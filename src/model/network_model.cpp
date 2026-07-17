@@ -107,12 +107,15 @@ bool NetworkModel::init(const std::string& iface,
 
     // 3. Attach TC filters via libbpf (shared maps with skeleton)
     {
-        // Remove stale filters from a previous run (idempotent)
+        // Remove stale qdisc + filters from a previous run (idempotent).
+        // This is necessary because a crashed/forgotten instance leaves the
+        // BPF program attached with an exclusivity flag, blocking re-attach.
         char cmd[256];
         snprintf(cmd, sizeof(cmd),
+                 "tc qdisc del dev %s clsact 2>/dev/null; "
                  "tc filter del dev %s ingress 2>/dev/null; "
                  "tc filter del dev %s egress 2>/dev/null",
-                 iface_.c_str(), iface_.c_str());
+                 iface_.c_str(), iface_.c_str(), iface_.c_str());
         system(cmd);
     }
 
@@ -201,8 +204,9 @@ void NetworkModel::stop() {
     if (worker_.joinable()) worker_.join();
     fprintf(stderr, "[NetworkModel] poll thread stopped\n");
 
-    // Detach TC filters via libbpf
+    // Detach TC filters + remove clsact qdisc
     {
+        // Try libbpf detach first (cleaner)
         int ifindex = if_nametoindex(iface_.c_str());
         if (ifindex > 0) {
             struct bpf_tc_hook tc_hook = {};
@@ -228,6 +232,13 @@ void NetworkModel::stop() {
                 impl_->egress_attached = false;
             }
         }
+
+        // Also nuke clsact from orbit — covers crashes where libbpf detach
+        // above succeeded but the qdisc still holds stale state.
+        char cmd[128];
+        snprintf(cmd, sizeof(cmd), "tc qdisc del dev %s clsact 2>/dev/null",
+                 iface_.c_str());
+        system(cmd);
     }
 
     // Free ring buffer

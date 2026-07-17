@@ -51,7 +51,11 @@ for iface in json.load(sys.stdin):
 fi
 info "Using interface: ${IFACE:-lo}"
 
-# ---------- step 5: run ----------
+# ---------- step 5: clean stale BPF TC hooks ----------
+info "Cleaning stale TC hooks on ${IFACE}…"
+sudo tc qdisc del dev "$IFACE" clsact 2>/dev/null || true
+
+# ---------- step 6: run ----------
 echo ""
 info "${GREEN}Starting ctop++${NC}"
 info "  System stats:  CPU · Memory · Disk I/O · Network (from /proc)"
