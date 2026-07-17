@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="main.qml">qml/main.qml</file>
+        <file alias="SystemStatsPage.qml">qml/SystemStatsPage.qml</file>
+        <file alias="NetworkTrafficPage.qml">qml/NetworkTrafficPage.qml</file>
+    </qresource>
+</RCC>

@@ -14,6 +14,8 @@ struct SysViewData {
     float mem_used_pct = 0.0f;
     uint64_t mem_total_gb = 0;
     uint64_t mem_avail_gb = 0;
+    uint64_t mem_total_mb = 0;
+    uint64_t mem_used_mb = 0;
     float disk_read_mbps = 0.0f;
     float disk_write_mbps = 0.0f;
     float net_rx_mbps = 0.0f;

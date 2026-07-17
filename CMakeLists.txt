@@ -6,19 +6,16 @@ include(CTest)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 # ---------------------------------------------------------------------------
-# Dependencies (vcpkg preferred, system fallback)
+# Dependencies: Qt6 (system packages)
 # ---------------------------------------------------------------------------
-find_package(imgui CONFIG REQUIRED)
-find_package(implot CONFIG REQUIRED)
-find_package(glfw3 CONFIG REQUIRED)
-find_package(OpenGL REQUIRED)
-find_package(Threads REQUIRED)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Quick)
 
 # libbpf — opt-in via system pkg-config (not vcpkg).
-# HAS_LIBBPF is only defined when BOTH libbpf and bpftool are present
-# (bpftool is required at build time for skeleton generation).
+# HAS_LIBBPF is only defined when BOTH libbpf and bpftool are present.
 find_package(PkgConfig)
 pkg_check_modules(LIBBPF libbpf IMPORTED_TARGET)
 find_program(BPFTOOL bpftool)
@@ -43,7 +40,12 @@ set(CTOPP_SOURCES
     src/viewmodel/net_view_model.cpp
 )
 
-add_executable(ctopp ${CTOPP_SOURCES})
+set(CTOPP_HEADERS
+    include/ctopp/viewmodel/sys_view_model.hpp
+    include/ctopp/viewmodel/net_view_model.hpp
+)
+
+add_executable(ctopp ${CTOPP_SOURCES} ${CTOPP_HEADERS})
 
 target_include_directories(ctopp PRIVATE
     ${CMAKE_SOURCE_DIR}/include
@@ -51,12 +53,13 @@ target_include_directories(ctopp PRIVATE
 )
 
 target_link_libraries(ctopp PRIVATE
-    imgui::imgui
-    implot::implot
-    glfw
-    OpenGL::GL
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Quick
     Threads::Threads
 )
+
+target_sources(ctopp PRIVATE ${CMAKE_SOURCE_DIR}/qml.qrc)
 
 if(LIBBPF_FOUND AND BPFTOOL)
     target_compile_definitions(ctopp PRIVATE HAS_LIBBPF)
@@ -71,7 +74,7 @@ if(CLANG)
     set(BPF_SOURCE  ${CMAKE_SOURCE_DIR}/bpf/traffic_monitor.bpf.c)
     set(BPF_OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/traffic_monitor.bpf.o)
 
-    # Multiarch include path for <asm/types.h> (e.g. /usr/include/x86_64-linux-gnu).
+    # Multiarch include path for <asm/types.h>
     set(BPF_ARCH_INCLUDE /usr/include/${CMAKE_SYSTEM_PROCESSOR}-linux-gnu)
     if(EXISTS "${BPF_ARCH_INCLUDE}")
         set(BPF_ARCH_FLAG -I${BPF_ARCH_INCLUDE})
@@ -121,33 +124,36 @@ if(LIBBPF_FOUND AND BPFTOOL AND CLANG)
         test/pipeline_smoke.cpp
         src/model/network_model.cpp
         src/viewmodel/net_view_model.cpp
+        include/ctopp/viewmodel/net_view_model.hpp
     )
     target_include_directories(pipe_test PRIVATE
         ${CMAKE_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_BINARY_DIR}        # for traffic_monitor.skel.h
+        ${CMAKE_CURRENT_BINARY_DIR}
     )
     target_compile_definitions(pipe_test PRIVATE HAS_LIBBPF)
     target_link_libraries(pipe_test PRIVATE
         PkgConfig::LIBBPF
+        Qt6::Core
         Threads::Threads
     )
     add_dependencies(pipe_test skel)
 endif()
 
 # ---------------------------------------------------------------------------
-# System statistics tests — no UI or libbpf dependency.
+# System statistics tests — no UI dependency.
 # ---------------------------------------------------------------------------
 if(BUILD_TESTING)
     add_executable(sys_stats_test
         test/sys_stats_test.cpp
         src/model/sys_stats_reader.cpp
         src/viewmodel/sys_view_model.cpp
+        include/ctopp/viewmodel/sys_view_model.hpp
     )
     target_include_directories(sys_stats_test PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/src/model
     )
-    target_link_libraries(sys_stats_test PRIVATE Threads::Threads)
+    target_link_libraries(sys_stats_test PRIVATE Qt6::Core Threads::Threads)
     add_test(NAME sys_stats_unit COMMAND sys_stats_test)
 
     add_executable(sys_stats_smoke
@@ -155,12 +161,13 @@ if(BUILD_TESTING)
         src/model/sys_stats_model.cpp
         src/model/sys_stats_reader.cpp
         src/viewmodel/sys_view_model.cpp
+        include/ctopp/viewmodel/sys_view_model.hpp
     )
     target_include_directories(sys_stats_smoke PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/src/model
     )
-    target_link_libraries(sys_stats_smoke PRIVATE Threads::Threads)
+    target_link_libraries(sys_stats_smoke PRIVATE Qt6::Core Threads::Threads)
     add_test(NAME sys_stats_pipeline COMMAND sys_stats_smoke)
     set_tests_properties(sys_stats_pipeline PROPERTIES TIMEOUT 6)
 endif()

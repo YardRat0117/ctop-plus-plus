@@ -66,20 +66,6 @@ static int handle_event(void* ctx, void* data, size_t size) {
     pkt.length       = meta->length;
     pkt.timestamp_ns = meta->timestamp_ns;
 
-    {
-        uint32_t sip = ntohl(pkt.src_ip);
-        uint32_t dip = ntohl(pkt.dest_ip);
-        fprintf(stderr,
-                "[DEBUG] pkt: %u.%u.%u.%u:%u -> %u.%u.%u.%u:%u  proto=%u  len=%u\n",
-                (sip >> 24) & 0xFF, (sip >> 16) & 0xFF,
-                (sip >> 8)  & 0xFF,  sip         & 0xFF,
-                pkt.src_port,
-                (dip >> 24) & 0xFF, (dip >> 16) & 0xFF,
-                (dip >> 8)  & 0xFF,  dip         & 0xFF,
-                pkt.dest_port,
-                pkt.protocol, pkt.length);
-    }
-
     self->invoke_callback(pkt);
     return 0;
 }
